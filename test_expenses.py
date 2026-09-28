@@ -7,9 +7,8 @@ import unittest
 import os
 import csv
 import tempfile
-from unittest.mock import patch, MagicMock
-from datetime import datetime
-import sys
+from unittest.mock import patch, call
+import expenses as tracker
 
 from expenses import (
     load_or_create_expenses,
@@ -73,7 +72,7 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         self.assertEqual(result[0]["description"], "Groceries")
     
     @patch("builtins.print")
-    @patch("builtins.input", return_value="no")
+    @patch("builtins.input", side_effect=["no"])
     def test_user_prompted_for_overwrite_if_header_missing(self, mock_input, mock_print):
         """Check that user is prompted for overwrite if header is missing"""
         # Create invalid file
@@ -84,7 +83,7 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         self.assertEqual(result, [])
     
     @patch("builtins.print")
-    @patch("builtins.input", return_value="no")
+    @patch("builtins.input", side_effect=["no"])
     def test_file_not_modified_if_user_declines_overwrite(self, mock_input, mock_print):
         """Check that file is not modified if user declines overwrite"""
         # Create invalid file
@@ -228,7 +227,7 @@ class TestGroupExpenses(unittest.TestCase):
 class TestGetValidDate(unittest.TestCase):
     """Tests for get_valid_date function"""
     
-    @patch("builtins.input", return_value="2026-01-15")
+    @patch("builtins.input", side_effect=["2026-01-15"])
     def test_valid_dates_accepted(self, mock_input):
         """Check that valid dates are accepted"""
         result = get_valid_date()
@@ -242,13 +241,13 @@ class TestGetValidDate(unittest.TestCase):
         self.assertEqual(result, "2026-01-15")
         mock_print.assert_called()
     
-    @patch("builtins.input", return_value="cancel")
+    @patch("builtins.input", side_effect=["cancel"])
     def test_cancellation_returns_none(self, mock_input):
         """Check that cancellation returns None"""
         result = get_valid_date()
         self.assertIsNone(result)
     
-    @patch("builtins.input", return_value="2024-02-29")
+    @patch("builtins.input", side_effect=["2024-02-29"])
     def test_leap_years_handled(self, mock_input):
         """Check that leap years are handled"""
         result = get_valid_date()
@@ -258,19 +257,19 @@ class TestGetValidDate(unittest.TestCase):
 class TestGetValidAmount(unittest.TestCase):
     """Tests for get_valid_amount function"""
     
-    @patch("builtins.input", return_value="50.00")
+    @patch("builtins.input", side_effect=["50.00"])
     def test_positive_numbers_accepted(self, mock_input):
         """Check that positive numbers are accepted"""
         result = get_valid_amount()
         self.assertEqual(result, 50.00)
     
-    @patch("builtins.input", return_value="50.99")
+    @patch("builtins.input", side_effect=["50.99"])
     def test_decimal_numbers_accepted(self, mock_input):
         """Check that decimal numbers are accepted"""
         result = get_valid_amount()
         self.assertEqual(result, 50.99)
     
-    @patch("builtins.input", return_value="-25.00")
+    @patch("builtins.input", side_effect=["-25.00"])
     def test_negative_numbers_accepted(self, mock_input):
         """Check that negative numbers are accepted"""
         result = get_valid_amount()
@@ -284,7 +283,7 @@ class TestGetValidAmount(unittest.TestCase):
         self.assertEqual(result, 50.00)
         mock_print.assert_called()
     
-    @patch("builtins.input", return_value="cancel")
+    @patch("builtins.input", side_effect=["cancel"])
     def test_cancellation_returns_none(self, mock_input):
         """Check that cancellation returns None"""
         result = get_valid_amount()
@@ -294,19 +293,19 @@ class TestGetValidAmount(unittest.TestCase):
 class TestGetValidYesNo(unittest.TestCase):
     """Tests for get_valid_yes_no function"""
     
-    @patch("builtins.input", return_value="yes")
+    @patch("builtins.input", side_effect=["yes"])
     def test_yes_returns_true(self, mock_input):
         """Check that 'yes' returns True"""
         result = get_valid_yes_no("Proceed?")
         self.assertTrue(result)
     
-    @patch("builtins.input", return_value="no")
+    @patch("builtins.input", side_effect=["no"])
     def test_no_returns_false(self, mock_input):
         """Check that 'no' returns False"""
         result = get_valid_yes_no("Proceed?")
         self.assertFalse(result)
     
-    @patch("builtins.input", return_value="YES")
+    @patch("builtins.input", side_effect=["YES"])
     def test_case_insensitive_yes(self, mock_input):
         """Check that case-insensitive input works"""
         result = get_valid_yes_no("Proceed?")
@@ -320,13 +319,13 @@ class TestGetValidYesNo(unittest.TestCase):
         self.assertTrue(result)
         mock_print.assert_called()
     
-    @patch("builtins.input", return_value="y")
+    @patch("builtins.input", side_effect=["y"])
     def test_y_returns_true(self, mock_input):
         """Check that 'y' returns True"""
         result = get_valid_yes_no("Proceed?")
         self.assertTrue(result)
     
-    @patch("builtins.input", return_value="n")
+    @patch("builtins.input", side_effect=["n"])
     def test_n_returns_false(self, mock_input):
         """Check that 'n' returns False"""
         result = get_valid_yes_no("Proceed?")
@@ -379,19 +378,19 @@ class TestCreateExpenseDict(unittest.TestCase):
 class TestGetTextInput(unittest.TestCase):
     """Tests for _get_text_input function"""
     
-    @patch("builtins.input", return_value="Groceries")
+    @patch("builtins.input", side_effect=["Groceries"])
     def test_text_input_returned(self, mock_input):
         """Check that text input is returned"""
         result = _get_text_input("description_prompt")
         self.assertEqual(result, "Groceries")
     
-    @patch("builtins.input", return_value="cancel")
+    @patch("builtins.input", side_effect=["cancel"])
     def test_cancellation_returns_none(self, mock_input):
         """Check that cancellation returns None"""
         result = _get_text_input("description_prompt")
         self.assertIsNone(result)
     
-    @patch("builtins.input", return_value="Test Input")
+    @patch("builtins.input", side_effect=["Test Input"])
     def test_prompt_displayed_correctly(self, mock_input):
         """Check that prompt is displayed correctly"""
         result = _get_text_input("description_prompt")
@@ -399,41 +398,52 @@ class TestGetTextInput(unittest.TestCase):
 
 
 class TestAddExpense(unittest.TestCase):
-    """Tests for add_expense function"""
-    
-    @patch("builtins.input", side_effect=["2026-01-15", "Groceries", "50.00", "Food"])
+    """Tests for the current one-line expense interface."""
+
+    @patch("builtins.input", side_effect=["2026-01-15,Groceries,50.00,Food"])
     @patch("builtins.print")
     def test_valid_expense_added(self, mock_print, mock_input):
-        """Check that valid expense is added to the list"""
+        """A single input collects every field and preserves the amount text."""
         expenses = []
-        result = add_expense(expenses)
-        self.assertTrue(result)
-        self.assertEqual(len(expenses), 1)
-        self.assertEqual(expenses[0]["description"], "Groceries")
-    
-    @patch("builtins.input", return_value="cancel")
+        self.assertTrue(add_expense(expenses))
+        self.assertEqual(expenses, [{"id": "1", "date": "2026-01-15",
+                                    "description": "Groceries", "amount": "50.00",
+                                    "category": "Food"}])
+        mock_input.assert_called_once_with(tracker.PROMPTS["item_prompt"])
+        mock_print.assert_called_once_with(tracker.PROMPTS["expense_added"])
+
+    @patch("builtins.input", side_effect=["<"])
     def test_cancellation_handled(self, mock_input):
-        """Check that cancellation is handled"""
-        expenses = []
-        result = add_expense(expenses)
-        self.assertFalse(result)
-        self.assertEqual(len(expenses), 0)
-    
-    @patch("builtins.input", side_effect=["invalid", "2026-01-15", "Groceries", "50.00", "Food"])
+        """The '<' cancellation leaves existing records unchanged."""
+        expenses = [{"id": "1", "description": "Existing"}]
+        original = [dict(expenses[0])]
+        self.assertFalse(add_expense(expenses))
+        self.assertEqual(expenses, original)
+        mock_input.assert_called_once_with(tracker.PROMPTS["item_prompt"])
+
+    @patch("builtins.input", side_effect=["invalid", "2026-01-15,Groceries,50.00,Food"])
     @patch("builtins.print")
     def test_invalid_inputs_rejected(self, mock_print, mock_input):
-        """Check that invalid inputs are rejected with re-prompt"""
+        """Invalid input is rejected once, then the valid record is added."""
         expenses = []
-        result = add_expense(expenses)
-        self.assertTrue(result)
-    
-    @patch("builtins.input", side_effect=["2026-01-15", "Groceries", "50.00", "Food"])
+        self.assertTrue(add_expense(expenses))
+        self.assertEqual(len(expenses), 1)
+        self.assertEqual(expenses[0]["description"], "Groceries")
+        self.assertEqual(mock_input.call_count, 2)
+        self.assertEqual(mock_print.call_args_list,
+                         [call(tracker.PROMPTS["invalid_item"]),
+                          call(tracker.PROMPTS["expense_added"])])
+
+    @patch("builtins.input", side_effect=["2026-01-15,Groceries,50.00,Food"])
     @patch("builtins.print")
     def test_id_correctly_assigned(self, mock_print, mock_input):
-        """Check that ID is correctly assigned"""
-        expenses = [{"id": "1", "date": "2026-01-01", "description": "Test", "amount": 50.00, "category": "Food"}]
-        add_expense(expenses)
+        """An existing ID of 1 gives the next item ID 2."""
+        expenses = [{"id": "1", "date": "2026-01-01", "description": "Test",
+                     "amount": "10", "category": "Food"}]
+        self.assertTrue(add_expense(expenses))
+        self.assertEqual(len(expenses), 2)
         self.assertEqual(expenses[1]["id"], "2")
+        mock_input.assert_called_once_with(tracker.PROMPTS["item_prompt"])
 
 
 class TestSaveExpenses(unittest.TestCase):
@@ -501,62 +511,57 @@ class TestSaveExpenses(unittest.TestCase):
 
 
 class TestHandleMenuChoice(unittest.TestCase):
-    """Tests for _handle_menu_choice function"""
-    
+    """Isolate menu dispatch from terminal input and file I/O."""
+
     def setUp(self):
-        """Create a temporary directory for test files"""
-        self.temp_dir = tempfile.mkdtemp()
-        self.test_file = os.path.join(self.temp_dir, "test_expenses.csv")
+        """Patch collaborators so no menu test can wait on real input."""
         self.expenses = []
-    
-    def tearDown(self):
-        """Clean up temporary files"""
-        if os.path.exists(self.test_file):
-            os.remove(self.test_file)
-        os.rmdir(self.temp_dir)
-    
-    @patch("builtins.print")
-    def test_menu_choice_1_displays_expenses(self, mock_print):
-        """Check that choice 1 displays expenses"""
-        result = _handle_menu_choice("1", self.expenses, self.test_file)
-        self.assertTrue(result)
-    
-    @patch("builtins.print")
-    def test_menu_choice_2_groups_by_date(self, mock_print):
-        """Check that choice 2 groups by date"""
-        result = _handle_menu_choice("2", self.expenses, self.test_file)
-        self.assertTrue(result)
-    
-    @patch("builtins.print")
-    def test_menu_choice_3_groups_by_category(self, mock_print):
-        """Check that choice 3 groups by category"""
-        result = _handle_menu_choice("3", self.expenses, self.test_file)
-        self.assertTrue(result)
-    
-    @patch("builtins.input", side_effect=["2026-01-15", "Groceries", "50.00", "Food"])
-    @patch("builtins.print")
-    def test_menu_choice_4_adds_expense(self, mock_print, mock_input):
-        """Check that choice 4 adds expense"""
-        result = _handle_menu_choice("4", self.expenses, self.test_file)
-        self.assertTrue(result)
-    
-    @patch("builtins.print")
-    def test_menu_choice_5_saves_expenses(self, mock_print):
-        """Check that choice 5 saves expenses"""
-        result = _handle_menu_choice("5", self.expenses, self.test_file)
-        self.assertTrue(result)
-    
-    def test_menu_choice_6_returns_false(self):
-        """Check that choice 6 (exit) returns False"""
-        result = _handle_menu_choice("6", self.expenses, self.test_file)
-        self.assertFalse(result)
-    
+        self.filename = "test_expenses.csv"
+        self.actions = {}
+        for name in ("display_expenses", "_handle_group_choice", "add_expense",
+                     "save_expenses", "_wait_for_enter"):
+            patcher = patch("expenses." + name)
+            self.actions[name] = patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def check_action(self, choice, name, *args):
+        """Assert exact dispatch, one pause, and no unrelated operation."""
+        self.assertTrue(_handle_menu_choice(choice, self.expenses, self.filename))
+        self.actions[name].assert_called_once_with(*args)
+        self.actions["_wait_for_enter"].assert_called_once_with()
+        for other_name, mock in self.actions.items():
+            if other_name not in (name, "_wait_for_enter"):
+                mock.assert_not_called()
+
+    def test_menu_choice_1_displays_expenses(self):
+        """Option 1 displays the current list."""
+        self.check_action("1", "display_expenses", self.expenses)
+
+    def test_menu_choice_2_opens_group_menu(self):
+        """Option 2 lets the grouping helper choose date or category."""
+        self.check_action("2", "_handle_group_choice", self.expenses)
+
+    def test_menu_choice_3_adds_expense(self):
+        """Option 3 adds an expense."""
+        self.check_action("3", "add_expense", self.expenses)
+
+    def test_menu_choice_4_saves_expenses(self):
+        """Option 4 saves the list to the selected file."""
+        self.check_action("4", "save_expenses", self.expenses, self.filename)
+
+    def test_menu_choice_5_returns_false(self):
+        """Option 5 exits without another action or pause."""
+        self.assertFalse(_handle_menu_choice("5", self.expenses, self.filename))
+        for mock in self.actions.values():
+            mock.assert_not_called()
+
     @patch("builtins.print")
     def test_invalid_choice_shows_error(self, mock_print):
-        """Check that invalid choice shows error message"""
-        result = _handle_menu_choice("7", self.expenses, self.test_file)
-        self.assertTrue(result)
-        mock_print.assert_called()
+        """Option 6 is invalid and keeps the menu running."""
+        self.assertTrue(_handle_menu_choice("6", self.expenses, self.filename))
+        mock_print.assert_called_once_with(tracker.PROMPTS["invalid_choice"])
+        for mock in self.actions.values():
+            mock.assert_not_called()
 
 
 if __name__ == "__main__":
