@@ -15,7 +15,3 @@ python -m unittest test_expenses_given
 python -m unittest discover -v
 ```
 
-The [research and improvement notes](research.md), original/final JPG diagrams,
-and [before evidence](before/README.md) retain the coursework context.
-See [the lab checklist and validation](LAB_REVIEW.md) and
-[the diagram review](diagram_review.md) for the remaining manual diagram changes.
