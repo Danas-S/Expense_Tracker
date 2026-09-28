@@ -3,9 +3,19 @@ A Personal Expense Tracker in Python for the GenAI-Assisted Programming module a
 
 The code in this repository was written with the assistance of GitHub Copilot. This repair pass used OpenAI Codex for debugging, test updates and refinement.
 
-Run `python expenses.py` from `week5` or `week9`. From either folder, run
-`python -m unittest test_expenses` and `python -m unittest test_expenses_given`.
-The root program and custom tests mirror Week 5; Week 9 contains the three improvements.
+The root `expenses.py` is the authoritative tracker, combining the original
+assignment with the corrected file handling, dynamic tables and menu configuration.
+Run it from this directory with `python expenses.py`.
 
-See [the lab review](LAB_REVIEW.md) for validation and
-[the diagram review](week9/diagram_review.md) for the remaining manual diagram changes.
+Run the tests from this directory:
+
+```text
+python -m unittest test_expenses
+python -m unittest test_expenses_given
+python -m unittest discover -v
+```
+
+The [research and improvement notes](research.md), original/final JPG diagrams,
+and [before evidence](before/README.md) retain the coursework context.
+See [the lab checklist and validation](LAB_REVIEW.md) and
+[the diagram review](diagram_review.md) for the remaining manual diagram changes.
