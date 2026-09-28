@@ -125,9 +125,9 @@ python expenses.py
 | Lecturer-provided test | 1 | 0 | 0 |
 | Full unittest discovery | 79 | 0 | 0 |
 
-The root suites pass before reference-folder removal. They must also be run
-again after removal to confirm the retained project is self-contained. Each run
-is bounded by a subprocess timeout. Static checks cover function docstrings,
+The root suites passed both before and after removing `week5/`, `week9/` and
+`Lab Instructions/`, confirming that the retained project is self-contained.
+Each run was bounded by a subprocess timeout. Static checks cover function docstrings,
 function sizes, import/function usage, preserved hashes and local documentation
 links. The docstring coverage map describes every production function.
 
