@@ -209,7 +209,7 @@ def add_expense(expenses):
     - expenses (list): List of expense dictionaries
     
     Returns:
-    - bool: True if expense was added, False if cancelled
+    - bool: True if added, False if cancelled with '<' or input reaches EOF
     
     Tests:
     - check that valid expense is added to the list
@@ -217,9 +217,13 @@ def add_expense(expenses):
     - check that invalid inputs are rejected with re-prompt
     - check that ID is correctly assigned
     - check that all required fields are collected
+    - check that EOF cancels without changing the list
     """
     while True:
-        raw_item = input(PROMPTS["item_prompt"]).strip()
+        try:
+            raw_item = input(PROMPTS["item_prompt"]).strip()
+        except EOFError:
+            return False
         if raw_item == "<":
             return False
         parsed_item = _parse_expense_line(raw_item)
@@ -422,13 +426,14 @@ def get_valid_yes_no(prompt):
     - prompt (str): The prompt to display
     
     Returns:
-    - bool: True for 'yes', False for 'no'
+    - bool: True for 'yes', False for 'no'; EOFError propagates to main
     
     Tests:
     - check that 'yes' returns True
     - check that 'no' returns False
     - check that case-insensitive input works
     - check that invalid input is rejected with re-prompt
+    - check that EOF propagates without retrying
     """
     while True:
         response = input(prompt).lower()
@@ -461,7 +466,7 @@ def get_next_id(expenses):
 
 # main
 def main():
-    """Main menu loop for expense tracker application.
+    """Run the menu, returning cleanly on exit or EOF from any input operation.
     
     Parameters:
     - None
@@ -474,16 +479,20 @@ def main():
     - check that all menu options work
     - check that invalid choices are handled
     - check that exit terminates the program
+    - check that EOF at startup, the menu or a nested operation exits cleanly
     """
-    filename = "expenses.csv"
-    expenses = load_or_create_expenses(filename)
-    
-    while True:
-        print(PROMPTS["menu_title"])
-        print(PROMPTS["menu_options"])
-        choice = input(PROMPTS["menu_choice"])
-        if not _handle_menu_choice(choice, expenses, filename):
-            break
+    try:
+        filename = "expenses.csv"
+        expenses = load_or_create_expenses(filename)
+
+        while True:
+            print(PROMPTS["menu_title"])
+            print(PROMPTS["menu_options"])
+            choice = input(PROMPTS["menu_choice"])
+            if not _handle_menu_choice(choice, expenses, filename):
+                return
+    except EOFError:
+        return
 
 
 def _handle_menu_choice(choice, expenses, filename):
@@ -531,7 +540,7 @@ def _handle_menu_choice(choice, expenses, filename):
 
 
 def _handle_group_choice(expenses):
-    """Prompt for grouping mode and display grouped totals.
+    """Prompt for grouping mode; propagate EOF to main if input ends.
     
     Parameters:
     - expenses (list): List of expense dictionaries
@@ -543,6 +552,7 @@ def _handle_group_choice(expenses):
     - check that 'd' groups by date
     - check that 'c' groups by category
     - check that invalid group input is re-prompted
+    - check that EOF propagates without retrying
     """
     while True:
         group_choice = input(PROMPTS["group_prompt"]).strip().lower()
@@ -556,7 +566,7 @@ def _handle_group_choice(expenses):
 
 
 def _wait_for_enter():
-    """Pause until user presses enter.
+    """Pause until user presses enter, returning immediately on EOF.
     
     Parameters:
     - None
@@ -566,8 +576,12 @@ def _wait_for_enter():
     
     Tests:
     - check that function consumes one input call
+    - check that EOF returns without retrying
     """
-    input(PROMPTS["continue_prompt"])
+    try:
+        input(PROMPTS["continue_prompt"])
+    except EOFError:
+        return
 
 
 # PYTHON: '__name__ == "__main__"' runs main() only when this file is executed directly.

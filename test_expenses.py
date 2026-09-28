@@ -7,6 +7,7 @@ import unittest
 import os
 import csv
 import tempfile
+from io import StringIO
 from unittest.mock import patch, call
 import expenses as tracker
 
@@ -445,6 +446,24 @@ class TestAddExpense(unittest.TestCase):
         self.assertEqual(expenses[1]["id"], "2")
         mock_input.assert_called_once_with(tracker.PROMPTS["item_prompt"])
 
+    @patch("builtins.input", side_effect=EOFError)
+    def test_eof_cancels_expense(self, mock_input):
+        """EOF cancels once without changing existing records."""
+        expenses = [{"id": "1"}]
+        self.assertFalse(add_expense(expenses))
+        self.assertEqual(expenses, [{"id": "1"}])
+        mock_input.assert_called_once_with(tracker.PROMPTS["item_prompt"])
+
+    @patch("builtins.input", side_effect=["invalid", EOFError])
+    @patch("builtins.print")
+    def test_invalid_then_eof_cancels(self, mock_print, mock_input):
+        """An exhausted input sequence cancels after the validation message."""
+        expenses = []
+        self.assertFalse(add_expense(expenses))
+        self.assertEqual(expenses, [])
+        self.assertEqual(mock_input.call_count, 2)
+        mock_print.assert_called_once_with(tracker.PROMPTS["invalid_item"])
+
 
 class TestSaveExpenses(unittest.TestCase):
     """Tests for save_expenses function"""
@@ -562,6 +581,71 @@ class TestHandleMenuChoice(unittest.TestCase):
         mock_print.assert_called_once_with(tracker.PROMPTS["invalid_choice"])
         for mock in self.actions.values():
             mock.assert_not_called()
+
+
+class TestEndOfInput(unittest.TestCase):
+    """EOF is handled at operation and application boundaries."""
+
+    @patch("builtins.input", side_effect=[""])
+    def test_pause_consumes_one_input(self, mock_input):
+        """Normal Enter returns after a single input call."""
+        self.assertIsNone(tracker._wait_for_enter())
+        mock_input.assert_called_once_with(tracker.PROMPTS["continue_prompt"])
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_pause_eof_returns(self, mock_input):
+        """A pause never retries exhausted input."""
+        self.assertIsNone(tracker._wait_for_enter())
+        mock_input.assert_called_once_with(tracker.PROMPTS["continue_prompt"])
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_group_eof_propagates(self, mock_input):
+        """The grouping helper leaves the application-exit decision to main."""
+        with self.assertRaises(EOFError):
+            tracker._handle_group_choice([])
+        mock_input.assert_called_once_with(tracker.PROMPTS["group_prompt"])
+
+    @patch("builtins.input", side_effect=EOFError)
+    def test_yes_no_eof_propagates(self, mock_input):
+        """EOF is not interpreted as permission to overwrite a file."""
+        with self.assertRaises(EOFError):
+            get_valid_yes_no("Overwrite?")
+        mock_input.assert_called_once_with("Overwrite?")
+
+    @patch("expenses.load_or_create_expenses", return_value=[])
+    @patch("builtins.print")
+    def test_main_menu_and_nested_eof_exit(self, mock_print, mock_load):
+        """Menu, grouping, adding and display pauses all stop with exhausted stdin."""
+        for text in ("", "2\n", "3\n", "1\n", "6\n"):
+            with self.subTest(text=text), patch("sys.stdin", StringIO(text)):
+                self.assertIsNone(tracker.main())
+        self.assertEqual(mock_load.call_args_list, [call("expenses.csv")] * 5)
+
+    @patch("builtins.input", side_effect=EOFError)
+    @patch("builtins.print")
+    def test_main_startup_eof_preserves_invalid_file(self, mock_print, mock_input):
+        """EOF at overwrite confirmation exits before displaying the main menu."""
+        with tempfile.TemporaryDirectory() as directory:
+            filename = os.path.join(directory, "invalid.csv")
+            with open(filename, "w") as handle:
+                handle.write("wrong,header\n")
+            with patch("expenses.load_or_create_expenses",
+                       side_effect=lambda name: load_or_create_expenses(filename)):
+                self.assertIsNone(tracker.main())
+            with open(filename) as handle:
+                self.assertEqual(handle.read(), "wrong,header\n")
+        mock_input.assert_called_once_with(tracker.PROMPTS["overwrite_prompt"])
+        self.assertNotIn(call(tracker.PROMPTS["menu_title"]), mock_print.call_args_list)
+
+    @patch("expenses.load_or_create_expenses", return_value=[])
+    @patch("builtins.input", side_effect=["5"])
+    @patch("builtins.print")
+    def test_main_exit_option(self, mock_print, mock_input, mock_load):
+        """Main exits normally with one menu selection."""
+        self.assertIsNone(tracker.main())
+        mock_load.assert_called_once_with("expenses.csv")
+        self.assertEqual(mock_input.call_count, 1)
+        self.assertIn(call(tracker.PROMPTS["menu_title"]), mock_print.call_args_list)
 
 
 if __name__ == "__main__":
