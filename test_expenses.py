@@ -70,7 +70,9 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         
         result = load_or_create_expenses(self.test_file)
         self.assertEqual(len(result), 1)
-        self.assertEqual(result[0]["description"], "Groceries")
+        self.assertEqual(result, [{"id": "1", "date": "2026-01-01",
+                                   "description": "Groceries", "amount": "50.00",
+                                   "category": "Food"}])
     
     @patch("builtins.print")
     @patch("builtins.input", side_effect=["no"])
@@ -82,6 +84,10 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         
         result = load_or_create_expenses(self.test_file)
         self.assertEqual(result, [])
+        mock_input.assert_called_once_with(tracker.PROMPTS["overwrite_prompt"])
+        self.assertEqual(mock_print.call_args_list,
+                         [call(tracker.PROMPTS["header_mismatch"]),
+                          call(tracker.PROMPTS["file_not_overwritten"])])
     
     @patch("builtins.print")
     @patch("builtins.input", side_effect=["no"])
@@ -96,7 +102,7 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         # Check file still has invalid header
         with open(self.test_file, "r") as f:
             content = f.read()
-        self.assertIn("invalid,header", content)
+        self.assertEqual(content, "invalid,header\n")
 
 
 class TestCreateCSVFile(unittest.TestCase):
@@ -134,7 +140,7 @@ class TestCreateCSVFile(unittest.TestCase):
         """Check that appropriate message is shown"""
         header = "id,date,description,amount,category"
         _create_csv_file(self.test_file, header, is_overwrite=False)
-        mock_print.assert_called()
+        mock_print.assert_called_once_with(tracker.PROMPTS["file_created"])
 
 
 class TestDisplayExpenses(unittest.TestCase):
@@ -148,16 +154,19 @@ class TestDisplayExpenses(unittest.TestCase):
             {"date": "2026-01-02", "description": "Gas", "amount": 40.00, "category": "Transport"}
         ]
         display_expenses(expenses)
-        mock_print.assert_called()
+        lines = [args[0] for args, _ in mock_print.call_args_list]
+        for heading in ("Date", "Description", "Amount", "Category"):
+            self.assertIn(heading, lines[1])
+        for value in ("2026-01-01", "Groceries", "$50.00", "Food"):
+            self.assertIn(value, lines[3])
+        for value in ("2026-01-02", "Gas", "$40.00", "Transport"):
+            self.assertIn(value, lines[4])
     
     @patch("builtins.print")
     def test_no_expenses_message(self, mock_print):
         """Check that no expenses shows appropriate message"""
         display_expenses([])
-        mock_print.assert_called()
-        # Check that "No expenses found" was printed
-        calls = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any("No expenses found" in str(call) for call in calls))
+        mock_print.assert_called_once_with(tracker.PROMPTS["no_expenses"])
     
     @patch("builtins.print")
     def test_amounts_formatted_properly(self, mock_print):
@@ -166,8 +175,9 @@ class TestDisplayExpenses(unittest.TestCase):
             {"date": "2026-01-01", "description": "Test", "amount": 10.5, "category": "Food"}
         ]
         display_expenses(expenses)
-        # Verify formatting in output
-        mock_print.assert_called()
+        lines = [args[0] for args, _ in mock_print.call_args_list]
+        self.assertIn("$10.50", lines[3])
+        self.assertNotIn("$10.500", lines[3])
 
 
 class TestGroupExpenses(unittest.TestCase):
@@ -213,16 +223,18 @@ class TestGroupExpenses(unittest.TestCase):
         expenses = [
             {"date": "2026-01-01", "description": "Test", "amount": 50.00, "category": "Food"}
         ]
-        group_expenses(expenses, "category")
-        mock_print.assert_called()
+        self.assertEqual(group_expenses(expenses, "category"), {"Food": 50.0})
+        lines = [args[0] for args, _ in mock_print.call_args_list]
+        self.assertEqual(lines[1].split(), ["Category", "Total"])
+        self.assertEqual(lines[3].split(), ["Food", "$50.00"])
+        self.assertEqual(lines[0].strip(), "=" * 50)
+        self.assertEqual(lines[-1].strip(), "=" * 50)
     
     @patch("builtins.print")
     def test_no_expenses_message(self, mock_print):
         """Check that no expenses shows appropriate message"""
-        group_expenses([], "date")
-        # Should show no expenses message
-        calls = [str(call) for call in mock_print.call_args_list]
-        self.assertTrue(any("No expenses found" in str(call) for call in calls))
+        self.assertEqual(group_expenses([], "date"), {})
+        mock_print.assert_called_once_with(tracker.PROMPTS["no_expenses"])
 
 
 class TestGetValidDate(unittest.TestCase):
@@ -318,7 +330,8 @@ class TestGetValidYesNo(unittest.TestCase):
         """Check that invalid input is rejected with re-prompt"""
         result = get_valid_yes_no("Proceed?")
         self.assertTrue(result)
-        mock_print.assert_called()
+        mock_print.assert_called_once_with(tracker.PROMPTS["invalid_yes_no"])
+        self.assertEqual(mock_input.call_args_list, [call("Proceed?"), call("Proceed?")])
     
     @patch("builtins.input", side_effect=["y"])
     def test_y_returns_true(self, mock_input):
@@ -501,7 +514,12 @@ class TestSaveExpenses(unittest.TestCase):
         with open(self.test_file, "r") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
-        self.assertEqual(len(rows), 2)
+        self.assertEqual(rows, [
+            {"id": "1", "date": "2026-01-01", "description": "Groceries",
+             "amount": "50.0", "category": "Food"},
+            {"id": "2", "date": "2026-01-02", "description": "Gas",
+             "amount": "40.0", "category": "Transport"}])
+        mock_print.assert_called_once_with(tracker.PROMPTS["expenses_saved"])
     
     @patch("builtins.print")
     def test_header_line_included(self, mock_print):
@@ -581,6 +599,157 @@ class TestHandleMenuChoice(unittest.TestCase):
         mock_print.assert_called_once_with(tracker.PROMPTS["invalid_choice"])
         for mock in self.actions.values():
             mock.assert_not_called()
+
+
+class TestParsing(unittest.TestCase):
+    """Exercise the current parser instead of separate field-input prompts."""
+
+    def test_valid_line_and_amount_text(self):
+        """Both supported date forms and numeric forms preserve entered text."""
+        for date in ("15/01/26", "2026-01-15"):
+            for amount in ("50", "50.00", "-25.50", "0"):
+                with self.subTest(date=date, amount=amount):
+                    self.assertEqual(tracker._parse_expense_line(
+                        f"{date},Groceries,{amount},Food"),
+                        (date, "Groceries", amount, "Food"))
+
+    def test_spaces_stripped(self):
+        """Spaces around all four values are stripped."""
+        self.assertEqual(tracker._parse_expense_line(
+            " 2026-01-15 , Groceries , 50.00 , Food "),
+            ("2026-01-15", "Groceries", "50.00", "Food"))
+
+    def test_invalid_lines(self):
+        """Wrong field counts, invalid amounts and invalid dates return None."""
+        for raw in ("", "invalid", "2026-01-15,Tea,2", "2026-01-15,Tea,2,Food,extra",
+                    "2026-01-15,Tea,abc,Food", "2026-02-30,Tea,2,Food",
+                    "bad,Tea,2,Food"):
+            with self.subTest(raw=raw):
+                self.assertIsNone(tracker._parse_expense_line(raw))
+
+    def test_supported_dates_and_leap_years(self):
+        """Real dates in either supported format are accepted."""
+        for date in ("2026-01-15", "15/01/26", "2024-02-29", "29/02/24"):
+            with self.subTest(date=date):
+                self.assertTrue(tracker._is_valid_date_text(date))
+        for date in ("2026-02-29", "31/04/26", "2026/01/15", "nonsense", ""):
+            with self.subTest(date=date):
+                self.assertFalse(tracker._is_valid_date_text(date))
+
+    def test_unsorted_ids_continue_after_maximum(self):
+        """IDs continue from the largest existing ID even when rows have gaps."""
+        self.assertEqual(get_next_id([{"id": "10"}, {"id": "2"}, {"id": "5"}]), 11)
+
+    def test_create_dict_preserves_string_amount(self):
+        """Creating a record preserves amount text and every named field."""
+        self.assertEqual(_create_expense_dict("2026-01-15", "Tea", "2.00", "Food", []),
+                         {"id": "1", "date": "2026-01-15", "description": "Tea",
+                          "amount": "2.00", "category": "Food"})
+
+
+class TestGroupChoice(unittest.TestCase):
+    """The grouping submenu validates its own choices."""
+
+    @patch("expenses.group_expenses")
+    def test_date_and_category_routes(self, mock_group):
+        """Date and category are selected inside the submenu."""
+        expenses = [{"id": "1"}]
+        for choice, key in (("d", "date"), ("c", "category"), (" C ", "category")):
+            with self.subTest(choice=choice), patch("builtins.input", side_effect=[choice]) as mock_input:
+                tracker._handle_group_choice(expenses)
+                mock_group.assert_called_once_with(expenses, key)
+                mock_input.assert_called_once_with(tracker.PROMPTS["group_prompt"])
+                mock_group.reset_mock()
+
+    @patch("expenses.group_expenses")
+    @patch("builtins.input", side_effect=["wrong", "d"])
+    @patch("builtins.print")
+    def test_invalid_group_reprompts(self, mock_print, mock_input, mock_group):
+        """Invalid submenu input prints an error before accepting a valid choice."""
+        tracker._handle_group_choice([])
+        mock_group.assert_called_once_with([], "date")
+        mock_print.assert_called_once_with(tracker.PROMPTS["invalid_group"])
+        self.assertEqual(mock_input.call_count, 2)
+
+
+class TestFileRoundTrip(unittest.TestCase):
+    """Real temporary files check loading, overwriting and saving new items."""
+
+    def setUp(self):
+        """Keep test files outside the project's expenses.csv."""
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.filename = os.path.join(directory.name, "expenses.csv")
+        self.header = "id,date,description,amount,category"
+
+    @patch("builtins.print")
+    def test_empty_file_receives_header(self, mock_print):
+        """An empty file is initialised just like a missing file."""
+        with open(self.filename, "w"):
+            pass
+        self.assertEqual(load_or_create_expenses(self.filename), [])
+        with open(self.filename) as handle:
+            self.assertEqual(handle.read(), self.header + "\n")
+        mock_print.assert_called_once_with(tracker.PROMPTS["file_created"])
+
+    @patch("builtins.input", side_effect=["yes"])
+    @patch("builtins.print")
+    def test_helper_overwrites_invalid_header(self, mock_print, mock_input):
+        """The validation helper replaces an invalid file only after consent."""
+        with open(self.filename, "w") as handle:
+            handle.write("invalid,header\n")
+        self.assertEqual(_load_or_validate_file(self.filename, self.header), [])
+        with open(self.filename) as handle:
+            self.assertEqual(handle.read(), self.header + "\n")
+        mock_input.assert_called_once_with(tracker.PROMPTS["overwrite_prompt"])
+        self.assertEqual(mock_print.call_args_list,
+                         [call(tracker.PROMPTS["header_mismatch"]),
+                          call(tracker.PROMPTS["file_overwritten"])])
+
+    @patch("builtins.input", side_effect=["2026-01-15,Groceries,50.00,Food"])
+    @patch("builtins.print")
+    def test_load_add_save_reload(self, mock_print, mock_input):
+        """Loaded rows survive saving alongside a newly entered row."""
+        original = self.header + "\n1,01/01/26,Tea,2,Food\n"
+        with open(self.filename, "w") as handle:
+            handle.write(original)
+        expenses = _load_or_validate_file(self.filename, self.header)
+        self.assertEqual(expenses, [{"id": "1", "date": "01/01/26",
+                                    "description": "Tea", "amount": "2", "category": "Food"}])
+        self.assertTrue(add_expense(expenses))
+        with open(self.filename) as handle:
+            self.assertEqual(handle.read(), original)
+        self.assertTrue(save_expenses(expenses, self.filename))
+        with open(self.filename) as handle:
+            self.assertEqual(handle.read(), original + "2,2026-01-15,Groceries,50.00,Food\n")
+        self.assertEqual(load_or_create_expenses(self.filename), expenses)
+
+    @patch("builtins.print")
+    def test_save_empty_list_writes_header(self, mock_print):
+        """Saving no expenses still writes a valid header."""
+        self.assertTrue(save_expenses([], self.filename))
+        with open(self.filename) as handle:
+            self.assertEqual(handle.read(), self.header + "\n")
+
+
+class TestMainMenu(unittest.TestCase):
+    """Check menu repetition with invalid input and a successful operation."""
+
+    @patch("expenses.load_or_create_expenses", return_value=[])
+    @patch("expenses.display_expenses")
+    @patch("expenses._wait_for_enter")
+    @patch("builtins.input", side_effect=["6", "1", "5"])
+    @patch("builtins.print")
+    def test_repeats_after_invalid_and_valid_choices(self, mock_print, mock_input,
+                                                   mock_pause, mock_display, mock_load):
+        """An invalid option and a display both return to the five-option menu."""
+        self.assertIsNone(tracker.main())
+        mock_display.assert_called_once_with([])
+        mock_pause.assert_called_once_with()
+        mock_load.assert_called_once_with("expenses.csv")
+        self.assertEqual(mock_input.call_count, 3)
+        self.assertEqual(mock_print.call_args_list.count(call(tracker.PROMPTS["menu_title"])), 3)
+        mock_print.assert_any_call(tracker.PROMPTS["invalid_choice"])
 
 
 class TestEndOfInput(unittest.TestCase):
