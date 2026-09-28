@@ -18,11 +18,8 @@ from expenses import (
     display_expenses,
     group_expenses,
     add_expense,
-    _get_text_input,
     _create_expense_dict,
     save_expenses,
-    get_valid_date,
-    get_valid_amount,
     get_valid_yes_no,
     get_next_id,
     _handle_menu_choice,
@@ -31,49 +28,49 @@ from expenses import (
 
 class TestLoadOrCreateExpenses(unittest.TestCase):
     """Tests for load_or_create_expenses function"""
-    
+
     def setUp(self):
         """Create a temporary directory for test files"""
         self.temp_dir = tempfile.mkdtemp()
         self.test_file = os.path.join(self.temp_dir, "test_expenses.csv")
-    
+
     def tearDown(self):
         """Clean up temporary files"""
         if os.path.exists(self.test_file):
             os.remove(self.test_file)
         os.rmdir(self.temp_dir)
-    
+
     def test_returns_list(self):
         """Check that function returns a list"""
         result = load_or_create_expenses(self.test_file)
         self.assertIsInstance(result, list)
-    
+
     def test_file_created_if_not_exists(self):
         """Check that file is created if it doesn't exist"""
         self.assertFalse(os.path.exists(self.test_file))
         load_or_create_expenses(self.test_file)
         self.assertTrue(os.path.exists(self.test_file))
-    
+
     def test_header_correctly_written(self):
         """Check that header line is correctly written"""
         load_or_create_expenses(self.test_file)
         with open(self.test_file, "r") as f:
             first_line = f.readline().strip()
         self.assertEqual(first_line, "id,date,description,amount,category")
-    
+
     def test_data_loaded_from_valid_file(self):
         """Check that data is loaded if valid file exists"""
         # Create a valid file with data
         with open(self.test_file, "w", newline="") as f:
             f.write("id,date,description,amount,category\n")
             f.write("1,2026-01-01,Groceries,50.00,Food\n")
-        
+
         result = load_or_create_expenses(self.test_file)
         self.assertEqual(len(result), 1)
         self.assertEqual(result, [{"id": "1", "date": "2026-01-01",
                                    "description": "Groceries", "amount": "50.00",
                                    "category": "Food"}])
-    
+
     @patch("builtins.print")
     @patch("builtins.input", side_effect=["no"])
     def test_user_prompted_for_overwrite_if_header_missing(self, mock_input, mock_print):
@@ -81,14 +78,14 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         # Create invalid file
         with open(self.test_file, "w") as f:
             f.write("invalid,header\n")
-        
+
         result = load_or_create_expenses(self.test_file)
         self.assertIsNone(result)
         mock_input.assert_called_once_with(tracker.PROMPTS["overwrite_prompt"])
         self.assertEqual(mock_print.call_args_list,
                          [call(tracker.PROMPTS["header_mismatch"]),
                           call(tracker.PROMPTS["file_not_overwritten"])])
-    
+
     @patch("builtins.print")
     @patch("builtins.input", side_effect=["no"])
     def test_file_not_modified_if_user_declines_overwrite(self, mock_input, mock_print):
@@ -96,9 +93,9 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
         # Create invalid file
         with open(self.test_file, "w") as f:
             f.write("invalid,header\n")
-        
+
         load_or_create_expenses(self.test_file)
-        
+
         # Check file still has invalid header
         with open(self.test_file, "r") as f:
             content = f.read()
@@ -107,25 +104,25 @@ class TestLoadOrCreateExpenses(unittest.TestCase):
 
 class TestCreateCSVFile(unittest.TestCase):
     """Tests for _create_csv_file function"""
-    
+
     def setUp(self):
         """Create a temporary directory for test files"""
         self.temp_dir = tempfile.mkdtemp()
         self.test_file = os.path.join(self.temp_dir, "test.csv")
-    
+
     def tearDown(self):
         """Clean up temporary files"""
         if os.path.exists(self.test_file):
             os.remove(self.test_file)
         os.rmdir(self.temp_dir)
-    
+
     @patch("builtins.print")
     def test_file_created_successfully(self, mock_print):
         """Check that file is created successfully"""
         header = "id,date,description,amount,category"
         _create_csv_file(self.test_file, header)
         self.assertTrue(os.path.exists(self.test_file))
-    
+
     @patch("builtins.print")
     def test_header_written_correctly(self, mock_print):
         """Check that header is written correctly"""
@@ -134,7 +131,7 @@ class TestCreateCSVFile(unittest.TestCase):
         with open(self.test_file, "r") as f:
             first_line = f.readline().strip()
         self.assertEqual(first_line, header)
-    
+
     @patch("builtins.print")
     def test_appropriate_message_shown(self, mock_print):
         """Check that appropriate message is shown"""
@@ -145,7 +142,7 @@ class TestCreateCSVFile(unittest.TestCase):
 
 class TestDisplayExpenses(unittest.TestCase):
     """Tests for display_expenses function"""
-    
+
     @patch("builtins.print")
     def test_table_displayed_correctly(self, mock_print):
         """Check that table is displayed correctly with all columns"""
@@ -161,13 +158,13 @@ class TestDisplayExpenses(unittest.TestCase):
             self.assertIn(value, lines[3])
         for value in ("2026-01-02", "Gas", "$40.00", "Transport"):
             self.assertIn(value, lines[4])
-    
+
     @patch("builtins.print")
     def test_no_expenses_message(self, mock_print):
         """Check that no expenses shows appropriate message"""
         display_expenses([])
         mock_print.assert_called_once_with(tracker.PROMPTS["no_expenses"])
-    
+
     @patch("builtins.print")
     def test_amounts_formatted_properly(self, mock_print):
         """Check that amounts are formatted properly"""
@@ -182,7 +179,7 @@ class TestDisplayExpenses(unittest.TestCase):
 
 class TestGroupExpenses(unittest.TestCase):
     """Tests for group_expenses function"""
-    
+
     @patch("builtins.print")
     def test_grouped_by_date(self, mock_print):
         """Check that expenses are correctly grouped by date"""
@@ -194,7 +191,7 @@ class TestGroupExpenses(unittest.TestCase):
         result = group_expenses(expenses, "date")
         self.assertEqual(result["2026-01-01"], 90.00)
         self.assertEqual(result["2026-01-02"], 15.00)
-    
+
     @patch("builtins.print")
     def test_grouped_by_category(self, mock_print):
         """Check that expenses are correctly grouped by category"""
@@ -206,7 +203,7 @@ class TestGroupExpenses(unittest.TestCase):
         result = group_expenses(expenses, "category")
         self.assertEqual(result["Food"], 80.00)
         self.assertEqual(result["Transport"], 40.00)
-    
+
     @patch("builtins.print")
     def test_sums_calculated_correctly(self, mock_print):
         """Check that sums are calculated correctly"""
@@ -216,7 +213,7 @@ class TestGroupExpenses(unittest.TestCase):
         ]
         result = group_expenses(expenses, "category")
         self.assertEqual(result["Food"], 100.00)
-    
+
     @patch("builtins.print")
     def test_results_displayed_in_table_format(self, mock_print):
         """Check that results are displayed in table format"""
@@ -229,7 +226,7 @@ class TestGroupExpenses(unittest.TestCase):
         self.assertEqual(lines[3].split(), ["Food", "$50.00"])
         self.assertEqual(lines[0].strip(), "=" * 50)
         self.assertEqual(lines[-1].strip(), "=" * 50)
-    
+
     @patch("builtins.print")
     def test_no_expenses_message(self, mock_print):
         """Check that no expenses shows appropriate message"""
@@ -237,93 +234,27 @@ class TestGroupExpenses(unittest.TestCase):
         mock_print.assert_called_once_with(tracker.PROMPTS["no_expenses"])
 
 
-class TestGetValidDate(unittest.TestCase):
-    """Tests for get_valid_date function"""
-    
-    @patch("builtins.input", side_effect=["2026-01-15"])
-    def test_valid_dates_accepted(self, mock_input):
-        """Check that valid dates are accepted"""
-        result = get_valid_date()
-        self.assertEqual(result, "2026-01-15")
-    
-    @patch("builtins.input", side_effect=["invalid", "2026-01-15"])
-    @patch("builtins.print")
-    def test_invalid_formats_rejected(self, mock_print, mock_input):
-        """Check that invalid formats are rejected"""
-        result = get_valid_date()
-        self.assertEqual(result, "2026-01-15")
-        mock_print.assert_called()
-    
-    @patch("builtins.input", side_effect=["cancel"])
-    def test_cancellation_returns_none(self, mock_input):
-        """Check that cancellation returns None"""
-        result = get_valid_date()
-        self.assertIsNone(result)
-    
-    @patch("builtins.input", side_effect=["2024-02-29"])
-    def test_leap_years_handled(self, mock_input):
-        """Check that leap years are handled"""
-        result = get_valid_date()
-        self.assertEqual(result, "2024-02-29")
-
-
-class TestGetValidAmount(unittest.TestCase):
-    """Tests for get_valid_amount function"""
-    
-    @patch("builtins.input", side_effect=["50.00"])
-    def test_positive_numbers_accepted(self, mock_input):
-        """Check that positive numbers are accepted"""
-        result = get_valid_amount()
-        self.assertEqual(result, 50.00)
-    
-    @patch("builtins.input", side_effect=["50.99"])
-    def test_decimal_numbers_accepted(self, mock_input):
-        """Check that decimal numbers are accepted"""
-        result = get_valid_amount()
-        self.assertEqual(result, 50.99)
-    
-    @patch("builtins.input", side_effect=["-25.00"])
-    def test_negative_numbers_accepted(self, mock_input):
-        """Check that negative numbers are accepted"""
-        result = get_valid_amount()
-        self.assertEqual(result, -25.00)
-    
-    @patch("builtins.input", side_effect=["not_a_number", "50.00"])
-    @patch("builtins.print")
-    def test_non_numeric_input_rejected(self, mock_print, mock_input):
-        """Check that non-numeric input is rejected"""
-        result = get_valid_amount()
-        self.assertEqual(result, 50.00)
-        mock_print.assert_called()
-    
-    @patch("builtins.input", side_effect=["cancel"])
-    def test_cancellation_returns_none(self, mock_input):
-        """Check that cancellation returns None"""
-        result = get_valid_amount()
-        self.assertIsNone(result)
-
-
 class TestGetValidYesNo(unittest.TestCase):
     """Tests for get_valid_yes_no function"""
-    
+
     @patch("builtins.input", side_effect=["yes"])
     def test_yes_returns_true(self, mock_input):
         """Check that 'yes' returns True"""
         result = get_valid_yes_no("Proceed?")
         self.assertTrue(result)
-    
+
     @patch("builtins.input", side_effect=["no"])
     def test_no_returns_false(self, mock_input):
         """Check that 'no' returns False"""
         result = get_valid_yes_no("Proceed?")
         self.assertFalse(result)
-    
+
     @patch("builtins.input", side_effect=["YES"])
     def test_case_insensitive_yes(self, mock_input):
         """Check that case-insensitive input works"""
         result = get_valid_yes_no("Proceed?")
         self.assertTrue(result)
-    
+
     @patch("builtins.input", side_effect=["invalid", "yes"])
     @patch("builtins.print")
     def test_invalid_input_rejected(self, mock_print, mock_input):
@@ -332,13 +263,13 @@ class TestGetValidYesNo(unittest.TestCase):
         self.assertTrue(result)
         mock_print.assert_called_once_with(tracker.PROMPTS["invalid_yes_no"])
         self.assertEqual(mock_input.call_args_list, [call("Proceed?"), call("Proceed?")])
-    
+
     @patch("builtins.input", side_effect=["y"])
     def test_y_returns_true(self, mock_input):
         """Check that 'y' returns True"""
         result = get_valid_yes_no("Proceed?")
         self.assertTrue(result)
-    
+
     @patch("builtins.input", side_effect=["n"])
     def test_n_returns_false(self, mock_input):
         """Check that 'n' returns False"""
@@ -348,12 +279,12 @@ class TestGetValidYesNo(unittest.TestCase):
 
 class TestGetNextId(unittest.TestCase):
     """Tests for get_next_id function"""
-    
+
     def test_id_is_one_for_empty_list(self):
         """Check that ID is 1 for empty list"""
         result = get_next_id([])
         self.assertEqual(result, 1)
-    
+
     def test_id_increments_correctly(self):
         """Check that ID increments correctly for existing expenses"""
         expenses = [
@@ -367,7 +298,7 @@ class TestGetNextId(unittest.TestCase):
 
 class TestCreateExpenseDict(unittest.TestCase):
     """Tests for _create_expense_dict function"""
-    
+
     def test_all_fields_included(self):
         """Check that all fields are included"""
         result = _create_expense_dict("2026-01-01", "Groceries", 50.00, "Food", [])
@@ -376,39 +307,17 @@ class TestCreateExpenseDict(unittest.TestCase):
         self.assertIn("description", result)
         self.assertIn("amount", result)
         self.assertIn("category", result)
-    
+
     def test_id_correctly_assigned(self):
         """Check that ID is correctly assigned"""
         expenses = [{"id": "1", "date": "2026-01-01", "description": "Test", "amount": 50.00, "category": "Food"}]
         result = _create_expense_dict("2026-01-02", "Test", 50.00, "Food", expenses)
         self.assertEqual(result["id"], "2")
-    
+
     def test_amount_type_preserved(self):
         """Check that amount type is preserved"""
         result = _create_expense_dict("2026-01-01", "Test", 50.00, "Food", [])
         self.assertIsInstance(result["amount"], float)
-
-
-class TestGetTextInput(unittest.TestCase):
-    """Tests for _get_text_input function"""
-    
-    @patch("builtins.input", side_effect=["Groceries"])
-    def test_text_input_returned(self, mock_input):
-        """Check that text input is returned"""
-        result = _get_text_input("description_prompt")
-        self.assertEqual(result, "Groceries")
-    
-    @patch("builtins.input", side_effect=["cancel"])
-    def test_cancellation_returns_none(self, mock_input):
-        """Check that cancellation returns None"""
-        result = _get_text_input("description_prompt")
-        self.assertIsNone(result)
-    
-    @patch("builtins.input", side_effect=["Test Input"])
-    def test_prompt_displayed_correctly(self, mock_input):
-        """Check that prompt is displayed correctly"""
-        result = _get_text_input("description_prompt")
-        self.assertEqual(result, "Test Input")
 
 
 class TestAddExpense(unittest.TestCase):
@@ -480,18 +389,18 @@ class TestAddExpense(unittest.TestCase):
 
 class TestSaveExpenses(unittest.TestCase):
     """Tests for save_expenses function"""
-    
+
     def setUp(self):
         """Create a temporary directory for test files"""
         self.temp_dir = tempfile.mkdtemp()
         self.test_file = os.path.join(self.temp_dir, "test_expenses.csv")
-    
+
     def tearDown(self):
         """Clean up temporary files"""
         if os.path.exists(self.test_file):
             os.remove(self.test_file)
         os.rmdir(self.temp_dir)
-    
+
     @patch("builtins.print")
     def test_file_created_with_correct_format(self, mock_print):
         """Check that file is created with correct format"""
@@ -501,7 +410,7 @@ class TestSaveExpenses(unittest.TestCase):
         result = save_expenses(expenses, self.test_file)
         self.assertTrue(result)
         self.assertTrue(os.path.exists(self.test_file))
-    
+
     @patch("builtins.print")
     def test_all_expenses_written_correctly(self, mock_print):
         """Check that all expenses are written correctly"""
@@ -510,7 +419,7 @@ class TestSaveExpenses(unittest.TestCase):
             {"id": "2", "date": "2026-01-02", "description": "Gas", "amount": 40.00, "category": "Transport"}
         ]
         save_expenses(expenses, self.test_file)
-        
+
         with open(self.test_file, "r") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
@@ -520,7 +429,7 @@ class TestSaveExpenses(unittest.TestCase):
             {"id": "2", "date": "2026-01-02", "description": "Gas",
              "amount": "40.0", "category": "Transport"}])
         mock_print.assert_called_once_with(tracker.PROMPTS["expenses_saved"])
-    
+
     @patch("builtins.print")
     def test_header_line_included(self, mock_print):
         """Check that header line is included"""
@@ -528,11 +437,11 @@ class TestSaveExpenses(unittest.TestCase):
             {"id": "1", "date": "2026-01-01", "description": "Test", "amount": 50.00, "category": "Food"}
         ]
         save_expenses(expenses, self.test_file)
-        
+
         with open(self.test_file, "r") as f:
             first_line = f.readline().strip()
         self.assertEqual(first_line, "id,date,description,amount,category")
-    
+
     @patch("builtins.print")
     def test_amount_formatted_correctly_in_file(self, mock_print):
         """Check that amount is formatted correctly in file"""
@@ -540,7 +449,7 @@ class TestSaveExpenses(unittest.TestCase):
             {"id": "1", "date": "2026-01-01", "description": "Test", "amount": 50.50, "category": "Food"}
         ]
         save_expenses(expenses, self.test_file)
-        
+
         with open(self.test_file, "r") as f:
             reader = csv.DictReader(f)
             rows = list(reader)
@@ -730,6 +639,34 @@ class TestFileRoundTrip(unittest.TestCase):
         self.assertTrue(save_expenses([], self.filename))
         with open(self.filename) as handle:
             self.assertEqual(handle.read(), self.header + "\n")
+
+    @patch("builtins.print")
+    def test_csv_quoting_survives_load_and_save(self, mock_print):
+        """Saving a loaded CSV preserves descriptions containing commas and quotes."""
+        text = self.header + '\n1,2026-01-15,"Tea, ""large""",2.00,Food\n'
+        with open(self.filename, "w") as handle:
+            handle.write(text)
+        expenses = load_or_create_expenses(self.filename)
+        self.assertEqual(expenses[0]["description"], 'Tea, "large"')
+        self.assertTrue(save_expenses(expenses, self.filename))
+        self.assertEqual(load_or_create_expenses(self.filename), expenses)
+        with open(self.filename) as handle:
+            self.assertEqual(handle.read(), text)
+
+    @patch("builtins.open", side_effect=PermissionError("read-only location"))
+    @patch("builtins.print")
+    def test_save_io_error_returns_false(self, mock_print, mock_open):
+        """A file error gives a useful message and a False return value."""
+        self.assertFalse(save_expenses([], self.filename))
+        mock_open.assert_called_once_with(self.filename, "w")
+        mock_print.assert_called_once_with(tracker.PROMPTS["save_failed"])
+
+    @patch("builtins.open", side_effect=RuntimeError("unexpected bug"))
+    def test_save_does_not_hide_programming_errors(self, mock_open):
+        """Unexpected errors propagate instead of being reported as a failed save."""
+        with self.assertRaisesRegex(RuntimeError, "unexpected bug"):
+            save_expenses([], self.filename)
+        mock_open.assert_called_once_with(self.filename, "w")
 
 
 class TestMainMenu(unittest.TestCase):
@@ -955,7 +892,7 @@ class TestWeek9Table(unittest.TestCase):
 
     def test_headers_set_minimum_column_widths(self):
         """Short values still leave enough room for all four headings."""
-        rows = [tracker.PROMPTS["table_headers"], ("d", "x", "$1.00", "c")]
+        rows = [tuple(tracker.PROMPTS["table_headers"].values()), ("d", "x", "$1.00", "c")]
         with patch("sys.stdout", new_callable=StringIO) as output:
             tracker._print_expense_table(rows)
         lines = output.getvalue().strip("\n").splitlines()

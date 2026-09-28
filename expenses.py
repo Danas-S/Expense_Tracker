@@ -4,33 +4,30 @@ A program to track personal expenses with CSV storage and menu-driven interface.
 """
 
 import csv
-import os
-from datetime import datetime
 # PYTHON: 'from ... import ...' imports a specific symbol directly from a module.
+from datetime import datetime
 from collections import defaultdict
 
+CSV_FIELDS = ("id", "date", "description", "amount", "category")
+CSV_HEADER = ",".join(CSV_FIELDS)
 
 
 # PYTHON: Dictionary literal maps string keys to prompt messages (dynamic key-value object).
 PROMPTS = {
+    "table_headers": {"date": "Date", "description": "Description",
+                      "amount": "Amount", "category": "Category"},
+    "total_heading": "Total",
     "menu_title": "\n=== Expense Tracker Menu ===",
     "menu_options": "\n1. Display all expenses\n2. Group expenses\n3. Add new expense\n4. Save expenses to file\n5. Exit",
     "menu_choice": "Enter your choice (1-5): ",
     "invalid_choice": "Invalid choice. Please enter a number between 1 and 5.",
-    
-    "date_prompt": "Enter date (YYYY-MM-DD): ",
-    "invalid_date": "Invalid date format. Please use YYYY-MM-DD.",
-    "description_prompt": "Enter description: ",
-    "amount_prompt": "Enter amount: ",
-    "invalid_amount": "Invalid amount. Please enter a valid number.",
-    "category_prompt": "Enter category: ",
+
     "item_prompt": "Enter expense as date,description,amount,category (or '<' to cancel): ",
     "invalid_item": "Invalid format. Use date,description,amount,category.",
     "group_prompt": "Group by date (d) or category (c)? ",
     "invalid_group": "Invalid choice. Enter 'd' or 'c'.",
     "continue_prompt": "",
-    "cancel_prompt": " (or type 'cancel' to go back): ",
-    
+
     "expense_added": "Expense added successfully!",
     "no_expenses": "No expenses found.",
     "file_created": "Created new expenses.csv file.",
@@ -40,19 +37,20 @@ PROMPTS = {
     "file_overwritten": "File overwritten.",
     "file_not_overwritten": "File not overwritten. Treating as empty.",
     "expenses_saved": "Expenses saved to file.",
+    "save_failed": "Could not save expenses to file.",
 }
 
 
 # load_or_create_expenses
 def load_or_create_expenses(filename):
     """Load expenses from CSV file or create new file if it doesn't exist.
-    
+
     Parameters:
     - filename (str): Path to the CSV file
-    
+
     Returns:
     - list: List of expense dictionaries with keys: id, date, description, amount, category
-    
+
     Tests:
     - check that function returns a list
     - check that file is created if it doesn't exist
@@ -61,49 +59,49 @@ def load_or_create_expenses(filename):
     - check that user is prompted for overwrite if header is missing
     - check that file is not modified if user declines overwrite
     """
-    expected_header = "id,date,description,amount,category"
+    # PYTHON: 'with open(...) as ...' is a context manager that auto-closes the file.
     with open(filename, "a+") as f:
         f.seek(0)
         first_line = f.readline().strip()
     if not first_line:
-        _create_csv_file(filename, expected_header)
+        _create_csv_file(filename, CSV_HEADER)
         return []
-    return _load_or_validate_file(filename, expected_header)
+    return _load_or_validate_file(filename, CSV_HEADER)
 
 
 def _create_csv_file(filename, header, is_overwrite=False):
     """Create a new CSV file with the specified header.
-    
+
     Parameters:
     - filename (str): Path to the CSV file
     - header (str): Header line to write
     - is_overwrite (bool): True if overwriting existing file
-    
+
     Returns:
     - None
-    
+
     Tests:
     - check that file is created successfully
     - check that header is written correctly
     - check that appropriate message is shown
     """
-    # PYTHON: 'with open(...) as ...' is a context manager that auto-closes the file.
     with open(filename, "w", newline="") as f:
         f.write(header + "\n")
+    # PYTHON: A conditional expression selects one value using if/else on one line.
     msg = "file_overwritten" if is_overwrite else "file_created"
     print(PROMPTS[msg])
 
 
 def _load_or_validate_file(filename, expected_header):
     """Validate CSV header and load data or recreate file.
-    
+
     Parameters:
     - filename (str): Path to the CSV file
     - expected_header (str): Expected header line
-    
+
     Returns:
-    - list: List of expense dictionaries
-    
+    - list: Loaded expenses, or an empty list if overwrite is declined
+
     Tests:
     - check that valid file is loaded
     - check that invalid header triggers overwrite prompt
@@ -111,7 +109,7 @@ def _load_or_validate_file(filename, expected_header):
     """
     with open(filename, "r") as f:
         first_line = f.readline().strip()
-    
+
     if first_line != expected_header:
         print(PROMPTS["header_mismatch"])
         if not get_valid_yes_no(PROMPTS["overwrite_prompt"]):
@@ -119,7 +117,7 @@ def _load_or_validate_file(filename, expected_header):
             return []
         _create_csv_file(filename, expected_header, is_overwrite=True)
         return []
-    
+
     expenses = []
     # PYTHON: csv.DictReader yields each CSV row as a dictionary keyed by header names.
     with open(filename, "r") as f:
@@ -132,13 +130,13 @@ def _load_or_validate_file(filename, expected_header):
 # display_expenses
 def display_expenses(expenses):
     """Display all expenses in a formatted table.
-    
+
     Parameters:
     - expenses (list): List of expense dictionaries
-    
+
     Returns:
     - None
-    
+
     Tests:
     - check that table is displayed correctly with all columns
     - check that no expenses shows appropriate message
@@ -147,10 +145,11 @@ def display_expenses(expenses):
     if not expenses:
         print(PROMPTS["no_expenses"])
         return
-    
+
     print("\n" + "="*70)
+    headings = PROMPTS["table_headers"]
     # PYTHON: f-string supports inline formatting/alignment inside braces.
-    print(f"{'Date':<12} {'Description':<20} {'Amount':>12} {'Category':<15}")
+    print(f"{headings['date']:<12} {headings['description']:<20} {headings['amount']:>12} {headings['category']:<15}")
     print("="*70)
     for expense in expenses:
         date = expense["date"]
@@ -165,14 +164,14 @@ def display_expenses(expenses):
 # group_expenses
 def group_expenses(expenses, group_by):
     """Group expenses by date or category and display sums.
-    
+
     Parameters:
     - expenses (list): List of expense dictionaries
     - group_by (str): 'date' or 'category' to determine grouping
-    
+
     Returns:
     - dict: Dictionary with groups as keys and total amounts as values
-    
+
     Tests:
     - check that expenses are correctly grouped by date
     - check that expenses are correctly grouped by category
@@ -182,35 +181,35 @@ def group_expenses(expenses, group_by):
     if not expenses:
         print(PROMPTS["no_expenses"])
         return {}
-    
+
     # PYTHON: defaultdict(float) auto-creates missing keys with 0.0 default values.
     groups = defaultdict(float)
     for expense in expenses:
         key = expense[group_by]
         groups[key] += float(expense["amount"])
-    
+
     print("\n" + "="*50)
-    header = group_by.capitalize()
-    print(f"{header:<30} {'Total':>15}")
+    header = PROMPTS["table_headers"][group_by]
+    print(f"{header:<30} {PROMPTS['total_heading']:>15}")
     print("="*50)
     for key in sorted(groups.keys()):
         amount = f"${groups[key]:.2f}"
         print(f"{key:<30} {amount:>15}")
     print("="*50 + "\n")
-    
+
     return dict(groups)
 
 
 # add_expense
 def add_expense(expenses):
     """Prompt user to enter a new expense and add to expenses list.
-    
+
     Parameters:
     - expenses (list): List of expense dictionaries
-    
+
     Returns:
     - bool: True if added, False if cancelled with '<' or input reaches EOF
-    
+
     Tests:
     - check that valid expense is added to the list
     - check that cancellation is handled
@@ -230,6 +229,7 @@ def add_expense(expenses):
         if parsed_item is None:
             print(PROMPTS["invalid_item"])
             continue
+        # PYTHON: Sequence unpacking assigns one value to each name in order.
         date, description, amount, category = parsed_item
         expenses.append(_create_expense_dict(date, description, amount, category, expenses))
         print(PROMPTS["expense_added"])
@@ -238,13 +238,13 @@ def add_expense(expenses):
 
 def _parse_expense_line(raw_item):
     """Parse a single-line expense entry in csv-like format.
-    
+
     Parameters:
     - raw_item (str): User text in format date,description,amount,category
-    
+
     Returns:
     - tuple | None: (date, description, amount, category) or None if invalid
-    
+
     Tests:
     - check that valid item line is parsed
     - check that spaces around values are stripped
@@ -252,6 +252,7 @@ def _parse_expense_line(raw_item):
     - check that invalid amount returns None
     - check that invalid date returns None
     """
+    # PYTHON: A list comprehension makes a list by stripping each input field.
     parts = [part.strip() for part in raw_item.split(",")]
     if len(parts) != 4:
         return None
@@ -267,13 +268,13 @@ def _parse_expense_line(raw_item):
 
 def _is_valid_date_text(date_text):
     """Validate supported date formats used in the app.
-    
+
     Parameters:
     - date_text (str): Date text to validate
-    
+
     Returns:
     - bool: True when date is valid in supported formats
-    
+
     Tests:
     - check that DD/MM/YY dates are accepted
     - check that YYYY-MM-DD dates are accepted
@@ -288,37 +289,19 @@ def _is_valid_date_text(date_text):
     return False
 
 
-def _get_text_input(prompt_key):
-    """Get text input from user with cancel support.
-    
-    Parameters:
-    - prompt_key (str): Key for PROMPTS dictionary
-    
-    Returns:
-    - str: User input or None if cancelled
-    
-    Tests:
-    - check that text input is returned
-    - check that cancellation returns None
-    - check that prompt is displayed correctly
-    """
-    user_input = input(PROMPTS[prompt_key] + PROMPTS["cancel_prompt"])
-    return None if user_input.lower() == "cancel" else user_input
-
-
 def _create_expense_dict(date, description, amount, category, expenses):
     """Create an expense dictionary with auto-generated ID.
-    
+
     Parameters:
     - date (str): Expense date
     - description (str): Expense description
-    - amount (float): Expense amount
+    - amount (str | float): Expense amount; keep its original representation
     - category (str): Expense category
     - expenses (list): Existing expenses list
-    
+
     Returns:
     - dict: Expense dictionary
-    
+
     Tests:
     - check that all fields are included
     - check that ID is correctly assigned
@@ -336,98 +319,45 @@ def _create_expense_dict(date, description, amount, category, expenses):
 # save_expenses
 def save_expenses(expenses, filename):
     """Save all expenses to CSV file.
-    
+
     Parameters:
     - expenses (list): List of expense dictionaries
     - filename (str): Path to the CSV file
-    
+
     Returns:
-    - bool: True if save was successful, False otherwise
-    
+    - bool: True on success, False on a file I/O error; programming errors propagate
+
     Tests:
     - check that file is created with correct format
     - check that all expenses are written correctly
     - check that header line is included
-    - check that amount is formatted correctly in file
+    - check that amount text is preserved in the file
+    - check that CSV quoting survives loading and saving
+    - check that I/O errors return False with a message
+    - check that unexpected programming errors are not hidden
     """
     try:
-        # PYTHON: 'try/except' handles runtime errors; broad except catches any exception type.
         with open(filename, "w") as f:
-            f.write("id,date,description,amount,category\n")
-            for expense in expenses:
-                amount_text = str(expense["amount"])
-                row = (
-                    f"{expense['id']},{expense['date']},{expense['description']},"
-                    f"{amount_text},{expense['category']}\n"
-                )
-                f.write(row)
+            # PYTHON: DictWriter writes named fields and quotes commas and quotes correctly.
+            writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, lineterminator="\n")
+            writer.writeheader()
+            writer.writerows(expenses)
         print(PROMPTS["expenses_saved"])
         return True
-    except Exception:
+    except OSError:
+        print(PROMPTS["save_failed"])
         return False
-
-
-# input_validation_helpers
-def get_valid_date():
-    """Prompt user for a valid date in YYYY-MM-DD format.
-    
-    Parameters:
-    - None
-    
-    Returns:
-    - str: Valid date string or None if cancelled
-    
-    Tests:
-    - check that valid dates are accepted
-    - check that invalid formats are rejected
-    - check that cancellation returns None
-    - check that leap years are handled
-    """
-    while True:
-        user_input = input(PROMPTS["date_prompt"] + PROMPTS["cancel_prompt"])
-        if user_input.lower() == "cancel":
-            return None
-        if _is_valid_date_text(user_input):
-            return user_input
-        else:
-            print(PROMPTS["invalid_date"])
-
-
-def get_valid_amount():
-    """Prompt user for a valid amount number.
-    
-    Parameters:
-    - None
-    
-    Returns:
-    - float: Valid amount or None if cancelled
-    
-    Tests:
-    - check that positive numbers are accepted
-    - check that decimal numbers are accepted
-    - check that negative numbers are accepted
-    - check that non-numeric input is rejected
-    - check that cancellation returns None
-    """
-    while True:
-        user_input = input(PROMPTS["amount_prompt"] + PROMPTS["cancel_prompt"])
-        if user_input.lower() == "cancel":
-            return None
-        try:
-            return float(user_input)
-        except ValueError:
-            print(PROMPTS["invalid_amount"])
 
 
 def get_valid_yes_no(prompt):
     """Prompt user for yes/no response.
-    
+
     Parameters:
     - prompt (str): The prompt to display
-    
+
     Returns:
     - bool: True for 'yes', False for 'no'; EOFError propagates to main
-    
+
     Tests:
     - check that 'yes' returns True
     - check that 'no' returns False
@@ -448,32 +378,33 @@ def get_valid_yes_no(prompt):
 
 def get_next_id(expenses):
     """Get the next ID for a new expense.
-    
+
     Parameters:
     - expenses (list): List of expense dictionaries
-    
+
     Returns:
     - int: Next ID number
-    
+
     Tests:
     - check that ID is 1 for empty list
     - check that ID increments correctly for existing expenses
     """
     if not expenses:
         return 1
+    # PYTHON: A generator supplies converted IDs to max without a temporary list.
     return max(int(expense["id"]) for expense in expenses) + 1
 
 
 # main
 def main():
     """Run the menu, returning cleanly on exit or EOF from any input operation.
-    
+
     Parameters:
     - None
-    
+
     Returns:
     - None
-    
+
     Tests:
     - check that menu is displayed repeatedly
     - check that all menu options work
@@ -497,15 +428,15 @@ def main():
 
 def _handle_menu_choice(choice, expenses, filename):
     """Handle a menu choice and execute corresponding action.
-    
+
     Parameters:
     - choice (str): User's menu choice
     - expenses (list): List of expense dictionaries
     - filename (str): Path to expenses CSV file
-    
+
     Returns:
     - bool: False if user chose to exit, True otherwise
-    
+
     Tests:
     - check that each menu choice executes correct function
     - check that exit returns False
@@ -513,41 +444,30 @@ def _handle_menu_choice(choice, expenses, filename):
     """
     if choice == "5":
         return False
-
     if choice == "1":
         display_expenses(expenses)
-        _wait_for_enter()
-        return True
-
-    if choice == "2":
+    elif choice == "2":
         _handle_group_choice(expenses)
-        _wait_for_enter()
-        return True
-
-    if choice == "3":
+    elif choice == "3":
         add_expense(expenses)
-        _wait_for_enter()
-        return True
-
-    if choice == "4":
+    elif choice == "4":
         save_expenses(expenses, filename)
-        _wait_for_enter()
-        return True
-
-    if choice not in ("1", "2", "3", "4", "5"):
+    else:
         print(PROMPTS["invalid_choice"])
+        return True
+    _wait_for_enter()
     return True
 
 
 def _handle_group_choice(expenses):
     """Prompt for grouping mode; propagate EOF to main if input ends.
-    
+
     Parameters:
     - expenses (list): List of expense dictionaries
-    
+
     Returns:
     - None
-    
+
     Tests:
     - check that 'd' groups by date
     - check that 'c' groups by category
@@ -567,13 +487,13 @@ def _handle_group_choice(expenses):
 
 def _wait_for_enter():
     """Pause until user presses enter, returning immediately on EOF.
-    
+
     Parameters:
     - None
-    
+
     Returns:
     - None
-    
+
     Tests:
     - check that function consumes one input call
     - check that EOF returns without retrying
