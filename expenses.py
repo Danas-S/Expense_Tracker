@@ -12,15 +12,36 @@ CSV_FIELDS = ("id", "date", "description", "amount", "category")
 CSV_HEADER = ",".join(CSV_FIELDS)
 
 
+MENU_DISPLAY = "1"
+MENU_GROUP = "2"
+MENU_ADD = "3"
+MENU_SAVE = "4"
+MENU_EXIT = "5"
+
+MENU_ITEMS = [
+    (MENU_DISPLAY, "menu_display"),
+    (MENU_GROUP, "menu_group"),
+    (MENU_ADD, "menu_add"),
+    (MENU_SAVE, "menu_save"),
+    (MENU_EXIT, "menu_exit"),
+]
+# PYTHON: A generator supplies each choice to tuple without building a temporary list.
+VALID_MENU_CHOICES = tuple(choice for choice, _ in MENU_ITEMS)
+
+
 # PYTHON: Dictionary literal maps string keys to prompt messages (dynamic key-value object).
 PROMPTS = {
+    "menu_display": "Display all expenses",
+    "menu_group": "Group expenses",
+    "menu_add": "Add new expense",
+    "menu_save": "Save expenses to file",
+    "menu_exit": "Exit",
     "table_headers": {"date": "Date", "description": "Description",
                       "amount": "Amount", "category": "Category"},
     "total_heading": "Total",
     "menu_title": "\n=== Expense Tracker Menu ===",
-    "menu_options": "\n1. Display all expenses\n2. Group expenses\n3. Add new expense\n4. Save expenses to file\n5. Exit",
-    "menu_choice": "Enter your choice (1-5): ",
-    "invalid_choice": "Invalid choice. Please enter a number between 1 and 5.",
+    "menu_choice": "Enter your choice ({choices}): ",
+    "invalid_choice": "Invalid choice. Please enter one of: {choices}.",
 
     "item_prompt": "Enter expense as date,description,amount,category (or '<' to cancel): ",
     "invalid_item": "Invalid format. Use date,description,amount,category.",
@@ -35,13 +56,13 @@ PROMPTS = {
     "overwrite_prompt": "Do you want to overwrite it? (yes/no): ",
     "invalid_yes_no": "Please enter 'yes' or 'no'.",
     "file_overwritten": "File overwritten.",
-    "file_not_overwritten": "File not overwritten. Treating as empty.",
+    "file_not_overwritten": "File not overwritten. Stopping the tracker.",
     "expenses_saved": "Expenses saved to file.",
     "save_failed": "Could not save expenses to file.",
 }
 
 
-# load_or_create_expenses
+# prompt: Load expenses from CSV, creating a new file with the expected header when needed.
 def load_or_create_expenses(filename):
     """Load expenses from CSV file or create new file if it doesn't exist.
 
@@ -49,10 +70,11 @@ def load_or_create_expenses(filename):
     - filename (str): Path to the CSV file
 
     Returns:
-    - list: List of expense dictionaries with keys: id, date, description, amount, category
+    - list | None: Loaded expenses, or None when overwrite is declined
 
     Tests:
-    - check that function returns a list
+    - check that successful loading returns a list
+    - check that a declined overwrite returns None
     - check that file is created if it doesn't exist
     - check that header line is correctly written
     - check that data is loaded if valid file exists
@@ -69,6 +91,7 @@ def load_or_create_expenses(filename):
     return _load_or_validate_file(filename, CSV_HEADER)
 
 
+# prompt: Create a CSV file with the provided header and show create/overwrite status.
 def _create_csv_file(filename, header, is_overwrite=False):
     """Create a new CSV file with the specified header.
 
@@ -92,6 +115,7 @@ def _create_csv_file(filename, header, is_overwrite=False):
     print(PROMPTS[msg])
 
 
+# prompt: Return None when overwrite is declined so main owns the exit decision.
 def _load_or_validate_file(filename, expected_header):
     """Validate CSV header and load data or recreate file.
 
@@ -100,12 +124,13 @@ def _load_or_validate_file(filename, expected_header):
     - expected_header (str): Expected header line
 
     Returns:
-    - list: Loaded expenses, or an empty list if overwrite is declined
+    - list | None: Loaded expenses, or None when overwrite is declined
 
     Tests:
     - check that valid file is loaded
     - check that invalid header triggers overwrite prompt
     - check that file is recreated if user confirms
+    - check that declining preserves the file and returns None without SystemExit
     """
     with open(filename, "r") as f:
         first_line = f.readline().strip()
@@ -114,7 +139,7 @@ def _load_or_validate_file(filename, expected_header):
         print(PROMPTS["header_mismatch"])
         if not get_valid_yes_no(PROMPTS["overwrite_prompt"]):
             print(PROMPTS["file_not_overwritten"])
-            return []
+            return None
         _create_csv_file(filename, expected_header, is_overwrite=True)
         return []
 
@@ -127,7 +152,7 @@ def _load_or_validate_file(filename, expected_header):
     return expenses
 
 
-# display_expenses
+# prompt: Display expenses using dynamic column widths based on current data instead of fixed literals.
 def display_expenses(expenses):
     """Display all expenses in a formatted table.
 
@@ -141,27 +166,51 @@ def display_expenses(expenses):
     - check that table is displayed correctly with all columns
     - check that no expenses shows appropriate message
     - check that amounts are formatted properly
+    - check that long values remain complete in dynamically sized columns
     """
     if not expenses:
         print(PROMPTS["no_expenses"])
         return
 
-    print("\n" + "="*70)
-    headings = PROMPTS["table_headers"]
-    # PYTHON: f-string supports inline formatting/alignment inside braces.
-    print(f"{headings['date']:<12} {headings['description']:<20} {headings['amount']:>12} {headings['category']:<15}")
-    print("="*70)
+    # PYTHON: Dictionary values keep their insertion order, matching the table columns.
+    rows = [tuple(PROMPTS["table_headers"].values())]
     for expense in expenses:
-        date = expense["date"]
-        # PYTHON: Slice syntax [:19] returns a substring without modifying original text.
-        desc = expense["description"][:19]
-        amount = f"${float(expense['amount']):.2f}"
-        category = expense["category"][:14]
-        print(f"{date:<12} {desc:<20} {amount:>12} {category:<15}")
-    print("="*70 + "\n")
+        # PYTHON: f-strings insert values and format the amount to two decimal places.
+        rows.append((expense["date"], expense["description"],
+                     f"${float(expense['amount']):.2f}", expense["category"]))
+    _print_expense_table(rows)
 
 
-# group_expenses
+# prompt: Print complete rows with widths that fit their headers and data.
+def _print_expense_table(rows):
+    """Print a table sized to its headers and formatted expense rows.
+
+    Parameters:
+    - rows (list): Header tuple followed by tuples of four display strings
+
+    Returns:
+    - None
+
+    Tests:
+    - check that long descriptions and categories are not truncated
+    - check that each column fits its heading and every value
+    - check that amounts are right-aligned and borders match the table width
+    """
+    # PYTHON: A list comprehension collects each column's maximum string length.
+    widths = [max(len(row[column]) for row in rows) for column in range(4)]
+    # PYTHON: Sequence unpacking assigns one value to each name in order.
+    date_w, desc_w, amount_w, category_w = widths
+    border = "=" * (sum(widths) + 3)
+    print("\n" + border)
+    # PYTHON: enumerate supplies both the position and value while looping.
+    for index, row in enumerate(rows):
+        print(f"{row[0]:<{date_w}} {row[1]:<{desc_w}} {row[2]:>{amount_w}} {row[3]:<{category_w}}")
+        if index == 0:
+            print(border)
+    print(border + "\n")
+
+
+# prompt: Group expenses by date or category and print summed totals.
 def group_expenses(expenses, group_by):
     """Group expenses by date or category and display sums.
 
@@ -200,7 +249,7 @@ def group_expenses(expenses, group_by):
     return dict(groups)
 
 
-# add_expense
+# prompt: Collect one comma-separated expense record from input and append it when valid.
 def add_expense(expenses):
     """Prompt user to enter a new expense and add to expenses list.
 
@@ -229,13 +278,13 @@ def add_expense(expenses):
         if parsed_item is None:
             print(PROMPTS["invalid_item"])
             continue
-        # PYTHON: Sequence unpacking assigns one value to each name in order.
         date, description, amount, category = parsed_item
         expenses.append(_create_expense_dict(date, description, amount, category, expenses))
         print(PROMPTS["expense_added"])
         return True
 
 
+# prompt: Parse and validate a comma-separated expense line.
 def _parse_expense_line(raw_item):
     """Parse a single-line expense entry in csv-like format.
 
@@ -252,7 +301,6 @@ def _parse_expense_line(raw_item):
     - check that invalid amount returns None
     - check that invalid date returns None
     """
-    # PYTHON: A list comprehension makes a list by stripping each input field.
     parts = [part.strip() for part in raw_item.split(",")]
     if len(parts) != 4:
         return None
@@ -266,6 +314,7 @@ def _parse_expense_line(raw_item):
     return date, description, amount_text, category
 
 
+# prompt: Validate date strings against supported app formats.
 def _is_valid_date_text(date_text):
     """Validate supported date formats used in the app.
 
@@ -289,6 +338,7 @@ def _is_valid_date_text(date_text):
     return False
 
 
+# prompt: Build a normalized expense dictionary with next sequential ID.
 def _create_expense_dict(date, description, amount, category, expenses):
     """Create an expense dictionary with auto-generated ID.
 
@@ -316,7 +366,7 @@ def _create_expense_dict(date, description, amount, category, expenses):
     }
 
 
-# save_expenses
+# prompt: Save all in-memory expense rows to CSV storage.
 def save_expenses(expenses, filename):
     """Save all expenses to CSV file.
 
@@ -349,6 +399,7 @@ def save_expenses(expenses, filename):
         return False
 
 
+# prompt: Re-prompt until yes/no input is provided and return as boolean.
 def get_valid_yes_no(prompt):
     """Prompt user for yes/no response.
 
@@ -376,6 +427,7 @@ def get_valid_yes_no(prompt):
             print(PROMPTS["invalid_yes_no"])
 
 
+# prompt: Compute the next expense ID based on existing entries.
 def get_next_id(expenses):
     """Get the next ID for a new expense.
 
@@ -391,11 +443,46 @@ def get_next_id(expenses):
     """
     if not expenses:
         return 1
-    # PYTHON: A generator supplies converted IDs to max without a temporary list.
     return max(int(expense["id"]) for expense in expenses) + 1
 
 
-# main
+# prompt: Build and return the numbered menu text from MENU_ITEMS.
+def _build_menu_options_text():
+    """Build printable menu options text from menu items.
+
+    Parameters:
+    - None
+
+    Returns:
+    - str: Formatted menu options text
+
+    Tests:
+    - check that all menu items appear in order
+    - check that option numbers and labels are formatted consistently
+    """
+    lines = [f"{choice}. {PROMPTS[label_key]}" for choice, label_key in MENU_ITEMS]
+    return "\n" + "\n".join(lines)
+
+
+# prompt: Build the menu choice input prompt from current valid options.
+def _build_menu_choice_prompt():
+    """Build a dynamic menu-choice prompt listing valid options.
+
+    Parameters:
+    - None
+
+    Returns:
+    - str: Prompt text showing valid menu choices
+
+    Tests:
+    - check that all valid choices are included in prompt text
+    - check that prompt format remains consistent
+    """
+    choices_text = ", ".join(VALID_MENU_CHOICES)
+    return PROMPTS["menu_choice"].format(choices=choices_text)
+
+
+# prompt: Run the interactive expense tracker loop until user exits.
 def main():
     """Run the menu, returning cleanly on exit or EOF from any input operation.
 
@@ -410,22 +497,26 @@ def main():
     - check that all menu options work
     - check that invalid choices are handled
     - check that exit terminates the program
+    - check that a declined overwrite exits before entering the menu
     - check that EOF at startup, the menu or a nested operation exits cleanly
     """
     try:
         filename = "expenses.csv"
         expenses = load_or_create_expenses(filename)
+        if expenses is None:
+            return
 
         while True:
             print(PROMPTS["menu_title"])
-            print(PROMPTS["menu_options"])
-            choice = input(PROMPTS["menu_choice"])
+            print(_build_menu_options_text())
+            choice = input(_build_menu_choice_prompt())
             if not _handle_menu_choice(choice, expenses, filename):
                 return
     except EOFError:
         return
 
 
+# prompt: Execute behavior for a selected menu option.
 def _handle_menu_choice(choice, expenses, filename):
     """Handle a menu choice and execute corresponding action.
 
@@ -442,23 +533,25 @@ def _handle_menu_choice(choice, expenses, filename):
     - check that exit returns False
     - check that invalid choice shows error message
     """
-    if choice == "5":
+    if choice == MENU_EXIT:
         return False
-    if choice == "1":
+    if choice == MENU_DISPLAY:
         display_expenses(expenses)
-    elif choice == "2":
+    elif choice == MENU_GROUP:
         _handle_group_choice(expenses)
-    elif choice == "3":
+    elif choice == MENU_ADD:
         add_expense(expenses)
-    elif choice == "4":
+    elif choice == MENU_SAVE:
         save_expenses(expenses, filename)
     else:
-        print(PROMPTS["invalid_choice"])
+        choices_text = ", ".join(VALID_MENU_CHOICES)
+        print(PROMPTS["invalid_choice"].format(choices=choices_text))
         return True
     _wait_for_enter()
     return True
 
 
+# prompt: Ask for grouping mode and display grouped totals when valid.
 def _handle_group_choice(expenses):
     """Prompt for grouping mode; propagate EOF to main if input ends.
 
@@ -485,6 +578,7 @@ def _handle_group_choice(expenses):
         print(PROMPTS["invalid_group"])
 
 
+# prompt: Pause until the user presses enter to continue.
 def _wait_for_enter():
     """Pause until user presses enter, returning immediately on EOF.
 
